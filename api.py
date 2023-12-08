@@ -54,35 +54,35 @@ def detection(frame, model):
     result_array = [shape, cls, xywh, ids, results[0]]
     return result_array
 def setStreight():
-  if (dict["last"] != "streight"):
-    dict["last"] = "streight"
+  # if (dict["last"] != "streight"):
+    # dict["last"] = "streight"
     return True
-  else:
-    return False
+  # else:
+    # return False
 def setSlow():
-  if dict["last"] != "near":
-    dict["last"] = "near"
+  # if dict["last"] != "near":
+    # dict["last"] = "near"
     return True
-  else:
-    return False
+  # else:
+    # return False
 def setStopAndCompleteTurn():
-  if dict["last"] != "stop":
-    dict["last"] = "stop"
+  # if dict["last"] != "stop":
+    # dict["last"] = "stop"
     return True
-  else:
-    return False
+  # else:
+    # return False
 def setStopLeft():
-  if dict["last"] != "stop":
-    dict["last"] = "stop"
+  # if dict["last"] != "stop":
+    # dict["last"] = "stop"
     return True
-  else:
-    return False
+  # else:
+    # return False
 def setStopRight():
-  if dict["last"] != "stop":
-    dict["last"] = "stop"
+  # if dict["last"] != "stop":
+    # dict["last"] = "stop"
     return True
-  else:
-    return False
+  # else:
+    # return False
 def extractClasses(ids, classes, filtered_listC):
   class_name = ""
   if len(filtered_listC) == 1:
@@ -241,7 +241,7 @@ def upload():
         traceback.print_exc()
         return jsonify({'error': 'An error occurred'}), 500
 
-@app.route('/', methods=['POST'])
+@app.route('/')
 def hello_world():
     print('Hello World')
     return jsonify({'width': '10'}), 200
