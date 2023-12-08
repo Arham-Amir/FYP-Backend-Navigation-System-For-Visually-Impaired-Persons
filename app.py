@@ -243,8 +243,7 @@ def upload():
 
 @app.route('/')
 def hello_world():
-    print('Hello World')
-    return jsonify({'width': '10'}), 200
+    return "Navigation System For Visually Impaired Persons"
 
 if __name__ == '__main__':
     app.run()
