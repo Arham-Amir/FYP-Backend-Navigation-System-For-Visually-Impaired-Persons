@@ -1,12 +1,9 @@
-import json
+#Center wala case
 import cv2
-import time
 from ultralytics import YOLO
-import IPython.display as ipd
 import numpy as np
 from flask import Flask, request, jsonify
 import base64
-import traceback
 
 # Initialize YOLO model
 model = YOLO("yolov8m.pt")
@@ -35,13 +32,17 @@ urdu_numbers_dict = {
     9: 'نو'
 }
 
-ColisionHeight = 80
-ClosenessHeight = 180
-CenterThreshold = 70
+ColisionHeight = 0.20
+ClosenessHeight = 0.34
+CenterThreshold = 0.18
 MinDistanceThreshold = 2
 dict = {}
-dict["last"] = "streight"
+dict["last"] = ""
 dict["choice"] = -1
+LeftDict = {}
+RightDict = {}
+SlowDict = {}
+StopDict = {}
 
 def object_distance(w, h):
   return ((2 * 3.14 * 180) / (w + h * 360) * 1000 + 3)
@@ -54,35 +55,23 @@ def detection(frame, model):
     result_array = [shape, cls, xywh, ids, results[0]]
     return result_array
 def setStreight():
-  # if (dict["last"] != "streight"):
-    # dict["last"] = "streight"
+  if (dict["last"] != "streight"):
+    dict["last"] = "streight"
     return True
-  # else:
-    # return False
+  else:
+    return False
 def setSlow():
-  # if dict["last"] != "near":
-    # dict["last"] = "near"
     return True
-  # else:
-    # return False
+
 def setStopAndCompleteTurn():
-  # if dict["last"] != "stop":
-    # dict["last"] = "stop"
     return True
-  # else:
-    # return False
+
 def setStopLeft():
-  # if dict["last"] != "stop":
-    # dict["last"] = "stop"
     return True
-  # else:
-    # return False
+
 def setStopRight():
-  # if dict["last"] != "stop":
-    # dict["last"] = "stop"
     return True
-  # else:
-    # return False
+
 def extractClasses(ids, classes, filtered_listC):
   class_name = ""
   if len(filtered_listC) == 1:
@@ -96,22 +85,42 @@ def extractClasses(ids, classes, filtered_listC):
         class_name += " , "
   return class_name
 
+def clearRepeatClasses(ids, filtered_listC, tempDict, ax):
+  tempL = []
+  for i, dis in enumerate(filtered_listC):
+      if int(ids[dis]) in tempDict:
+        pass
+      else:
+        tempDict[int(ids[dis])] = ax
+        tempL.append(dis)
+  # Remove keys from tempDict that are not present in the ids list
+  keys_to_remove = [key for key in tempDict if key not in ids]
+  for key in keys_to_remove:
+      del tempDict[key]
+  return tempL
+
+
 def setChoice(ch):
   if (ch == 3 and dict['choice'] == 4) or (ch == 4 and dict['choice'] == 3):
     dict['choice'] = 2
-  elif ch > dict['choice']:
+  elif dict['choice'] == 1 and ch > dict['choice']:
+    dict['choice'] = ch
+  elif dict['choice'] == -1:
     dict['choice'] = ch
 
 def checkColision(imageB, objB):
+  closenessLvl = imageB[0] * ClosenessHeight
+  colisionLvl = imageB[0] * ColisionHeight
+  centerLvl = imageB[1] * CenterThreshold
   imageW, imageH = imageB[1], imageB[0]
   left = int(objB[0] - objB[2] / 2)
   right = int(objB[0] + objB[2] / 2)
   top = int(objB[1] - objB[3] / 2)
   bottom = int(objB[1] + objB[3] / 2)
 
-  centerLeft, centerRight = [imageW/2 - CenterThreshold, imageW/2 + CenterThreshold]
+  centerLeft, centerRight = [imageW/2 - centerLvl, imageW/2 + centerLvl]
   if (not (left<centerLeft and right<centerLeft) and not (left>centerRight and right>centerRight)):
-    if bottom > imageH - ColisionHeight and (left < centerRight or right > centerLeft): #check colision
+    if bottom > imageH - colisionLvl and (left < centerRight or right > centerLeft): #check colision
       if left < centerLeft and right > centerRight:
         setChoice(2)
       elif left < centerLeft:
@@ -119,7 +128,7 @@ def checkColision(imageB, objB):
       elif right > centerRight:
         setChoice(4)
       return True
-    elif bottom > imageH - ClosenessHeight and bottom < imageH - ColisionHeight and (left < centerRight or right > centerLeft): #check closeness
+    elif bottom > imageH - closenessLvl and bottom < imageH - colisionLvl and (left < centerRight or right > centerLeft): #check closeness
       setChoice(1)
       return True
     else:
@@ -135,7 +144,6 @@ def guide_user(frame, model):
     detection_list = []
 
     dict["choice"] == 0
-
     if ids is not None:
       for i, x in enumerate(classes):
        class_id = int(x.item())
@@ -151,17 +159,16 @@ def guide_user(frame, model):
       filtered_listD = [num for num in all_boxes_distance_list if num <= min_distance + MinDistanceThreshold]
       filtered_listC = []
       for dis in filtered_listD:
+        tempList = [index for index, value in enumerate(all_boxes_distance_list) if value == dis]
         cols = checkColision(shape, boxes[all_boxes_distance_list.index(dis)])
         if cols:
           collision = True
-          tempList = [index for index, value in enumerate(all_boxes_distance_list) if value == dis]
           filtered_listC.extend(tempList)
 
     # no hurdle wala case
     if dict["choice"] == 0:
       if setStreight():
         message = f"سیدھے چلتے جائیں"
-        time.sleep(0.3)
       else:
         temp = {}
         temp["left"] = []
@@ -172,11 +179,12 @@ def guide_user(frame, model):
             dict[int(ids[x])] += 1
           else:
             dict[int(ids[x])] = 1
-            print(boxes[x])
             if boxes[x][0] < shape[1] // 2:
                     temp["left"].append(x)
             elif boxes[x][0] > shape[1] // 2:
                     temp["right"].append(x)
+        temp["left"] = clearRepeatClasses(ids, filtered_listC, LeftDict, 0)
+        temp["right"] = clearRepeatClasses(ids, filtered_listC, RightDict, 0)
         if temp["left"] != [] and temp["right"] != []:
           left_objects = extractClasses(ids, classes, temp["left"])
           right_objects = extractClasses(ids, classes, temp["right"])
@@ -190,37 +198,69 @@ def guide_user(frame, model):
     # near wala case
     elif dict["choice"] == 1 :
       if setSlow():
-        class_name = extractClasses(ids, classes, filtered_listC)
-        message = f"آگے {class_name} سے بچنے کے لئے آہستہ چلیں"
+        filtered_listC = clearRepeatClasses(ids, filtered_listC, SlowDict, 1)
+        if filtered_listC != [] :
+          class_name = extractClasses(ids, classes, filtered_listC)
+          message = f"آگے {class_name} سے بچنے کے لئے آہستہ چلیں"
       dict["choice"] = -1
     # stop And Complete Turn wala case
     elif dict["choice"] == 2:
       if setStopAndCompleteTurn():
-          class_name = class_name = extractClasses(ids, classes, filtered_listC)
-          message = f"رک جائیں {class_name} سے بچنے کے لئے بائیں جانب جائیں  "
+        filtered_listC = clearRepeatClasses(ids, filtered_listC, StopDict, 2)
+        if filtered_listC != [] :
+            class_name = class_name = extractClasses(ids, classes, filtered_listC)
+            message = f"رک جائیں {class_name} سے بچنے کے لئے بائیں جانب جائیں  "
       dict["choice"] = -1
     # stop And Right Turn wala case
     elif dict["choice"] == 3:
       if setStopLeft():
-        class_name = class_name = extractClasses(ids, classes, filtered_listC)
-        message = f"رک جائیں {class_name} سے بچنے کے لئے تھوڑا دائیں جانب ہو جائیں  "
+        filtered_listC = clearRepeatClasses(ids, filtered_listC, StopDict, 2)
+        if filtered_listC != [] :
+          class_name = class_name = extractClasses(ids, classes, filtered_listC)
+          message = f"رک جائیں {class_name} سے بچنے کے لئے تھوڑا دائیں جانب ہو جائیں  "
       dict["choice"] = -1
     # stop And Left Turn wala case
     elif dict["choice"] == 4:
       if setStopRight():
-        class_name = class_name = extractClasses(ids, classes, filtered_listC)
-        message = f"رک جائیں {class_name} سے بچنے کے لئے تھوڑا بائیں جانب ہو جائیں  "
+        filtered_listC = clearRepeatClasses(ids, filtered_listC, StopDict, 2)
+        if filtered_listC != [] :
+          class_name = class_name = extractClasses(ids, classes, filtered_listC)
+          message = f"رک جائیں {class_name} سے بچنے کے لئے تھوڑا بائیں جانب ہو جائیں  "
       dict["choice"] = -1
+
     response = {
           'speech': message,
           'boxes': boxes.tolist(),
           'names': detection_list
       }
+    return response
+def display_frame(result):
+    annotated_frame = result.plot()
+    cv2_imshow(annotated_frame)
 
-    return json.dumps(response), 200
 
 
 app = Flask(__name__)
+
+@app.route('/uploadByGallery', methods=['POST'])
+def uploadByGallery():
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+
+        image = request.files['image']
+        if image.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        if image:
+            image_bytes = image.read()
+            image_np = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
+            response = guide_user(img, model)
+            return jsonify(response), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -233,17 +273,15 @@ def upload():
 
       # Call the guide_user function with the rotated image
       response = guide_user(rotated_image, model)
-      print(response)
 
       return jsonify(response), 200
 
     except Exception as e:
-        traceback.print_exc()
         return jsonify({'error': 'An error occurred'}), 500
 
-@app.route('/')
+@app.route('/', methods=['POST'])
 def hello_world():
-    return "Navigation System For Visually Impaired Persons"
+    return jsonify({'width': '10'}), 200
 
 if __name__ == '__main__':
     app.run()
