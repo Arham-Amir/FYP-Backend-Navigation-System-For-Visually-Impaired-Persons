@@ -15,7 +15,7 @@ import os
 import traceback
 
 # Initialize YOLO model
-model = YOLO("yolov8m.pt")
+
 object_id_to_name = {
     0: 'فرد', 1: 'سائیکل', 2: 'گاڑی', 3: 'موٹرسائیکل', 4: 'ہوائی جہاز', 5: 'بس', 6: 'ٹرین', 7: 'ٹرک', 8: 'کشتی',
     9: 'ٹریفک لائٹ', 10: 'فائر ہائیڈرینٹ', 11: 'اسٹاپ سائن', 12: 'پارکنگ میٹر', 13: 'بینچ', 14: 'پرندہ',
@@ -56,6 +56,7 @@ StopDict = {}
 def object_distance(w, h):
   return ((2 * 3.14 * 180) / (w + h * 360) * 1000 + 3)
 def detection(frame, model):
+    model = YOLO("yolov8m.pt")
     results = model.track(frame, conf=0.3, iou=0.5)
     shape = results[0].boxes.orig_shape
     cls = results[0].boxes.cls
