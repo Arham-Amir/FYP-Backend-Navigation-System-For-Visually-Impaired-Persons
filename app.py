@@ -1,21 +1,22 @@
 #Center wala case
-import json
-import cv2
-import time
+# import json
+# import cv2
+# import time
 from ultralytics import YOLO
-from IPython.display import display, clear_output
-from PIL import Image, ImageDraw
+# from IPython.display import display, clear_output
 # from google.colab.patches import cv2_imshow
-import IPython.display as ipd
+# import IPython.display as ipd
 import numpy as np
 from flask import Flask, request, jsonify
 # from flask_ngrok import run_with_ngrok
 import base64
-import os
+# import os
 import traceback
+from PIL import Image
+import io
 
 # Initialize YOLO model
-
+model = YOLO("yolov8m.pt")
 object_id_to_name = {
     0: 'فرد', 1: 'سائیکل', 2: 'گاڑی', 3: 'موٹرسائیکل', 4: 'ہوائی جہاز', 5: 'بس', 6: 'ٹرین', 7: 'ٹرک', 8: 'کشتی',
     9: 'ٹریفک لائٹ', 10: 'فائر ہائیڈرینٹ', 11: 'اسٹاپ سائن', 12: 'پارکنگ میٹر', 13: 'بینچ', 14: 'پرندہ',
@@ -52,13 +53,10 @@ LeftDict = {}
 RightDict = {}
 SlowDict = {}
 StopDict = {}
-model = 0
 
 def object_distance(w, h):
   return ((2 * 3.14 * 180) / (w + h * 360) * 1000 + 3)
-def detection(frame):
-    global model
-    model = YOLO("yolov8m.pt")
+def detection(frame, model):
     results = model.track(frame, conf=0.3, iou=0.5)
     shape = results[0].boxes.orig_shape
     cls = results[0].boxes.cls
@@ -149,21 +147,21 @@ def checkColision(imageB, objB):
   setChoice(0)
   return False
 
-def guide_user(frame):
-    shape, classes, boxes, ids, result = detection(frame)
+def guide_user(frame, model):
+    shape, classes, boxes, ids, result = detection(frame, model)
     all_boxes_distance_list = []
     message = ""
     detection_list = []
 
     centerLeft_x_int = int(shape[1] / 2 - shape[1] * CenterThreshold)
     centerRight_x_int = int(shape[1] / 2 + shape[1] * CenterThreshold)
-    cv2.line(frame, (centerLeft_x_int, 0), (centerLeft_x_int, shape[0]), (255, 0, 255), 2)
-    cv2.line(frame, (centerRight_x_int, 0), (centerRight_x_int, shape[0]), (255, 0, 255), 2)
+    # cv2.line(frame, (centerLeft_x_int, 0), (centerLeft_x_int, shape[0]), (255, 0, 255), 2)
+    # cv2.line(frame, (centerRight_x_int, 0), (centerRight_x_int, shape[0]), (255, 0, 255), 2)
     colisionLvl = int(shape[0] * ColisionHeight)
     closenessLvl = int(shape[0] * ClosenessHeight)
 
-    cv2.line(frame, (0, shape[0] - colisionLvl), (shape[1], shape[0] - colisionLvl), (0, 0, 255), 2)
-    cv2.line(frame, (0, shape[0] - closenessLvl), (shape[1], shape[0] - closenessLvl), (0, 255, 0), 2)
+    # cv2.line(frame, (0, shape[0] - colisionLvl), (shape[1], shape[0] - colisionLvl), (0, 0, 255), 2)
+    # cv2.line(frame, (0, shape[0] - closenessLvl), (shape[1], shape[0] - closenessLvl), (0, 255, 0), 2)
 
     # display_frame(result)
 
@@ -177,7 +175,7 @@ def guide_user(frame):
         distancei = object_distance(w, h)
         all_boxes_distance_list.append(distancei)
       min_distance = min(all_boxes_distance_list)
-      # print(detection_list)
+      print(detection_list)
       #                         check agar 1 ya 1 se zyada cheezon se takranye lagye hain to
       collision = False
       filtered_listD = [num for num in all_boxes_distance_list if num <= min_distance + MinDistanceThreshold]
@@ -188,7 +186,7 @@ def guide_user(frame):
         if cols:
           collision = True
           filtered_listC.extend(tempList)
-    # print(dict["choice"])
+    print(dict["choice"])
     # no hurdle wala case
     if dict["choice"] == 0:
       if setStreight():
@@ -197,7 +195,7 @@ def guide_user(frame):
         temp = {}
         temp["left"] = []
         temp["right"] = []
-        print( temp["left"],  temp["right"], filtered_listD)
+        #print( temp["left"],  temp["right"], filtered_listD)
         for dis in filtered_listD:
           x = all_boxes_distance_list.index(dis)
           if int(ids[x]) in dict:
@@ -210,7 +208,7 @@ def guide_user(frame):
                     temp["right"].append(x)
         temp["left"] = clearRepeatClasses(ids, filtered_listC, LeftDict, 0)
         temp["right"] = clearRepeatClasses(ids, filtered_listC, RightDict, 0)
-        print( temp["left"],  temp["right"])
+        #print( temp["left"],  temp["right"])
         if temp["left"] != [] and temp["right"] != []:
           left_objects = extractClasses(ids, classes, temp["left"])
           right_objects = extractClasses(ids, classes, temp["right"])
@@ -255,7 +253,6 @@ def guide_user(frame):
       dict["choice"] = -1
 
     response = {
-          "choice": dict["choice"],
           'speech': message,
           'boxes': boxes.tolist(),
           'names': detection_list
@@ -271,39 +268,19 @@ def guide_user(frame):
 app = Flask(__name__)
 # run_with_ngrok(app)
 
-@app.route('/uploadByGallery', methods=['POST'])
-def uploadByGallery():
-    try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
-
-        image = request.files['image']
-        if image.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
-
-        if image:
-            image_bytes = image.read()
-            image_np = np.frombuffer(image_bytes, np.uint8)
-            img = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
-            response = guide_user(img, model)
-            print(response)
-            return jsonify(response), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
       base64_image = request.form.get('image')
       image_data = base64.b64decode(base64_image)
-      nparr = np.frombuffer(image_data, np.uint8)
-      image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-      rotated_image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+      image = Image.open(io.BytesIO(image_data))
+      rotated_image = image.rotate(-90, expand=True)  # PIL rotates counter-clockwise
+      np_image = np.array(rotated_image)
 
       # Call the guide_user function with the rotated image
-      response = guide_user(rotated_image)
-      # print(response)
+      response = guide_user(np_image, model)
+      print(response)
 
       return jsonify(response), 200
 
@@ -313,7 +290,7 @@ def upload():
 
 @app.route('/', methods=['GET'])
 def hello_world():
-    global dict
+    global dict, LeftDict, RightDict, SlowDict, StopDict
     dict["last"] = ""
     dict["choice"] = -1
     LeftDict = {}
