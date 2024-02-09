@@ -1,9 +1,18 @@
 #Center wala case
+import json
 import cv2
+import time
 from ultralytics import YOLO
+from IPython.display import display, clear_output
+from PIL import Image, ImageDraw
+# from google.colab.patches import cv2_imshow
+import IPython.display as ipd
 import numpy as np
 from flask import Flask, request, jsonify
+# from flask_ngrok import run_with_ngrok
 import base64
+import os
+import traceback
 
 # Initialize YOLO model
 model = YOLO("yolov8m.pt")
@@ -34,7 +43,7 @@ urdu_numbers_dict = {
 
 ColisionHeight = 0.20
 ClosenessHeight = 0.34
-CenterThreshold = 0.18
+CenterThreshold = 0.15
 MinDistanceThreshold = 2
 dict = {}
 dict["last"] = ""
@@ -47,7 +56,7 @@ StopDict = {}
 def object_distance(w, h):
   return ((2 * 3.14 * 180) / (w + h * 360) * 1000 + 3)
 def detection(frame, model):
-    results = model.track(frame, persist=True)
+    results = model.track(frame, conf=0.3, iou=0.5)
     shape = results[0].boxes.orig_shape
     cls = results[0].boxes.cls
     xywh = results[0].boxes.xywh
@@ -143,17 +152,29 @@ def guide_user(frame, model):
     message = ""
     detection_list = []
 
+    centerLeft_x_int = int(shape[1] / 2 - shape[1] * CenterThreshold)
+    centerRight_x_int = int(shape[1] / 2 + shape[1] * CenterThreshold)
+    cv2.line(frame, (centerLeft_x_int, 0), (centerLeft_x_int, shape[0]), (255, 0, 255), 2)
+    cv2.line(frame, (centerRight_x_int, 0), (centerRight_x_int, shape[0]), (255, 0, 255), 2)
+    colisionLvl = int(shape[0] * ColisionHeight)
+    closenessLvl = int(shape[0] * ClosenessHeight)
+
+    cv2.line(frame, (0, shape[0] - colisionLvl), (shape[1], shape[0] - colisionLvl), (0, 0, 255), 2)
+    cv2.line(frame, (0, shape[0] - closenessLvl), (shape[1], shape[0] - closenessLvl), (0, 255, 0), 2)
+
+    # display_frame(result)
+
     dict["choice"] == 0
     if ids is not None:
       for i, x in enumerate(classes):
-       class_id = int(x.item())
-       detection_list.append(f"Id: {int(ids[i].item())} {object_id_to_name[class_id]}")
+       class_id = int(x)
+       detection_list.append(f"Id: {int(ids[i])} {object_id_to_name[class_id]}")
       for i, obj in enumerate(boxes):
         w, h = obj[2], obj[3]
         distancei = object_distance(w, h)
         all_boxes_distance_list.append(distancei)
       min_distance = min(all_boxes_distance_list)
-
+      # print(detection_list)
       #                         check agar 1 ya 1 se zyada cheezon se takranye lagye hain to
       collision = False
       filtered_listD = [num for num in all_boxes_distance_list if num <= min_distance + MinDistanceThreshold]
@@ -164,7 +185,7 @@ def guide_user(frame, model):
         if cols:
           collision = True
           filtered_listC.extend(tempList)
-
+    # print(dict["choice"])
     # no hurdle wala case
     if dict["choice"] == 0:
       if setStreight():
@@ -173,6 +194,7 @@ def guide_user(frame, model):
         temp = {}
         temp["left"] = []
         temp["right"] = []
+        print( temp["left"],  temp["right"], filtered_listD)
         for dis in filtered_listD:
           x = all_boxes_distance_list.index(dis)
           if int(ids[x]) in dict:
@@ -185,6 +207,7 @@ def guide_user(frame, model):
                     temp["right"].append(x)
         temp["left"] = clearRepeatClasses(ids, filtered_listC, LeftDict, 0)
         temp["right"] = clearRepeatClasses(ids, filtered_listC, RightDict, 0)
+        print( temp["left"],  temp["right"])
         if temp["left"] != [] and temp["right"] != []:
           left_objects = extractClasses(ids, classes, temp["left"])
           right_objects = extractClasses(ids, classes, temp["right"])
@@ -229,18 +252,20 @@ def guide_user(frame, model):
       dict["choice"] = -1
 
     response = {
+          "choice": dict["choice"],
           'speech': message,
           'boxes': boxes.tolist(),
           'names': detection_list
       }
     return response
-def display_frame(result):
-    annotated_frame = result.plot()
-    cv2_imshow(annotated_frame)
+# def display_frame(result):
+#     annotated_frame = result.plot()
+#     cv2_imshow(annotated_frame)
 
 
 
-app = Flask(__name__)
+app = Flask(_name_)
+# run_with_ngrok(app)
 
 @app.route('/uploadByGallery', methods=['POST'])
 def uploadByGallery():
@@ -257,6 +282,7 @@ def uploadByGallery():
             image_np = np.frombuffer(image_bytes, np.uint8)
             img = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
             response = guide_user(img, model)
+            print(response)
             return jsonify(response), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -273,15 +299,24 @@ def upload():
 
       # Call the guide_user function with the rotated image
       response = guide_user(rotated_image, model)
+      # print(response)
 
       return jsonify(response), 200
 
     except Exception as e:
+        traceback.print_exc()
         return jsonify({'error': 'An error occurred'}), 500
 
-@app.route('/', methods=['POST'])
+@app.route('/', methods=['GET'])
 def hello_world():
+    dict = {}
+    dict["last"] = ""
+    dict["choice"] = -1
+    LeftDict = {}
+    RightDict = {}
+    SlowDict = {}
+    StopDict = {}
     return jsonify({'width': '10'}), 200
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     app.run()
