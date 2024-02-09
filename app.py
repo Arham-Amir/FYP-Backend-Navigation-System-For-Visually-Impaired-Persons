@@ -319,5 +319,5 @@ def hello_world():
     StopDict = {}
     return jsonify({'width': '10'}), 200
 
-if __name__ == '_main_':
+if __name__ == '__main__':
     app.run()
