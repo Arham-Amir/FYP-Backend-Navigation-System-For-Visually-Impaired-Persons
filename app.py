@@ -2,15 +2,15 @@
 # import json
 # import cv2
 # import time
-from ultralytics import YOLO
 # from IPython.display import display, clear_output
 # from google.colab.patches import cv2_imshow
 # import IPython.display as ipd
+# from flask_ngrok import run_with_ngrok
+# import os
+from ultralytics import YOLO
 import numpy as np
 from flask import Flask, request, jsonify
-# from flask_ngrok import run_with_ngrok
 import base64
-# import os
 import traceback
 from PIL import Image
 import io
