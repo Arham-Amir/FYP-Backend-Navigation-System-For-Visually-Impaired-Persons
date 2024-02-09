@@ -52,10 +52,12 @@ LeftDict = {}
 RightDict = {}
 SlowDict = {}
 StopDict = {}
+model = 0
 
 def object_distance(w, h):
   return ((2 * 3.14 * 180) / (w + h * 360) * 1000 + 3)
-def detection(frame, model):
+def detection(frame):
+    global model
     model = YOLO("yolov8m.pt")
     results = model.track(frame, conf=0.3, iou=0.5)
     shape = results[0].boxes.orig_shape
@@ -147,8 +149,8 @@ def checkColision(imageB, objB):
   setChoice(0)
   return False
 
-def guide_user(frame, model):
-    shape, classes, boxes, ids, result = detection(frame, model)
+def guide_user(frame):
+    shape, classes, boxes, ids, result = detection(frame)
     all_boxes_distance_list = []
     message = ""
     detection_list = []
@@ -300,7 +302,7 @@ def upload():
       rotated_image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
 
       # Call the guide_user function with the rotated image
-      response = guide_user(rotated_image, model)
+      response = guide_user(rotated_image)
       # print(response)
 
       return jsonify(response), 200
@@ -311,7 +313,7 @@ def upload():
 
 @app.route('/', methods=['GET'])
 def hello_world():
-    dict = {}
+    global dict
     dict["last"] = ""
     dict["choice"] = -1
     LeftDict = {}
