@@ -258,13 +258,14 @@ def guide_user(frame, model):
           'names': detection_list
       }
     return response
+
 # def display_frame(result):
 #     annotated_frame = result.plot()
 #     cv2_imshow(annotated_frame)
 
 
 
-app = Flask(_name_)
+app = Flask(__name__)
 # run_with_ngrok(app)
 
 @app.route('/uploadByGallery', methods=['POST'])
@@ -318,5 +319,5 @@ def hello_world():
     StopDict = {}
     return jsonify({'width': '10'}), 200
 
-if _name_ == '_main_':
+if __name__ == '_main_':
     app.run()
